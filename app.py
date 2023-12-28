@@ -2,14 +2,46 @@ from flask import Flask, request, jsonify
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-from models import Employee, supabaseUser
+# from models import Employee, supabaseUser
 
 app = Flask(__name__)
 bcrypt = Bcrypt()
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+CORS(app)
 
+# Set configurations
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres:Vasantharajan#00@db.dovsdgqpanrgzeieqgmd.supabase.co:5432/postgres"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Disable modification tracking
+
+# Initialize SQLAlchemy instance with the app
 db = SQLAlchemy(app)
+# db.init_app(app)
+
+# User table
+class supabaseUser(db.Model):
+     
+    __table_name__ = 'supabase_user'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String, unique=True, nullable=False)
+    email = db.Column(db.String)
+    password = db.Column(db.String)
+    
+# Employee table
+class Employee(db.Model):
+
+    __table_name__ = 'employee'
+
+    employee_id = db.Column(db.Integer, primary_key=True)
+    employee_name = db.Column(db.String)
+    age = db.Column(db.Integer)
+    gender = db.Column(db.String)
+    is_active = db.Column(db.String)
+    aadhar_number = db.Column(db.String)
+    mobile_number = db.Column(db.String)
+    city = db.Column(db.String)
+
+with app.app_context():
+    db.create_all()
 
 # Signup endpoint
 @app.route('/signup', methods=['POST'])
