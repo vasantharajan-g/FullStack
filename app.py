@@ -41,59 +41,6 @@ def signin():
     else:
         return jsonify({'error': 'Invalid Email or password'}), 500
 
-# Get all users endpoint
-@app.route('/get_all_users', methods=['GET'])
-def get_all_users():
-    users = supabaseUser.query.all()
-    user_list = [{'id': user.id, 'username': user.username, 'email': user.email} for user in users]
-    return jsonify({'users': user_list})
-
-# Get one user endpoint
-@app.route('/get_user/<int:user_id>', methods=['GET'])
-def get_user(user_id):
-    user = supabaseUser.query.get(user_id)
-
-    if user:
-        return jsonify({'user': {'id': user.id, 'username': user.username, 'email': user.email}})
-    else:
-        return jsonify({'error': 'User not found'})
-
-# Update one user endpoint
-@app.route('/update_user/<int:user_id>', methods=['PUT'])
-def update_user(user_id):
-    data = request.get_json()
-    new_username = data.get('username')
-    new_email = data.get('email')
-
-    try:
-        user = supabaseUser.query.get(user_id)
-
-        if user:
-            user.username = new_username
-            user.email = new_email
-
-            db.session.commit()
-            return jsonify({'message': 'User updated successfully'})
-        else:
-            return jsonify({'error': 'User not found'})
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
-# Delete one user endpoint
-@app.route('/delete_user/<int:user_id>', methods=['DELETE'])
-def delete_user(user_id):
-    try:
-        user = supabaseUser.query.get(user_id)
-
-        if user:
-            db.session.delete(user)
-            db.session.commit()
-            return jsonify({'message': 'User deleted successfully'})
-        else:
-            return jsonify({'error': 'User not found'})
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
 # Create employee endpoint
 @app.route('/create_employee', methods=['POST'])
 def create_employee():
