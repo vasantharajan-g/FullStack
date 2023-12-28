@@ -1,17 +1,15 @@
 from flask import Flask, request, jsonify
 from flask_bcrypt import Bcrypt
-import psycopg2
 from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from models import Employee, supabaseUser
 
 app = Flask(__name__)
 bcrypt = Bcrypt()
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
-# Replace these variables with your own Supabase database credentials
-DATABASE_URL = "postgresql://postgres:Vasantharajan#00@db.dovsdgqpanrgzeieqgmd.supabase.co:5432/postgres"
-conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-cursor = conn.cursor()
-
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres:Vasantharajan#00@db.dovsdgqpanrgzeieqgmd.supabase.co:5432/postgres"
+db = SQLAlchemy(app)
 
 # Signup endpoint
 @app.route('/signup', methods=['POST'])
@@ -22,15 +20,12 @@ def signup():
     password = bcrypt.generate_password_hash(data.get('password')).decode('utf-8')
 
     try:
-        cursor.execute("INSERT INTO supabase_user (username, email, password) VALUES (%s, %s, %s) RETURNING id;",
-                       (username, email, password))
-        conn.commit()
-        user_id = cursor.fetchone()[0]
-        print("user_id", user_id, username)
-        return jsonify({'message': 'User registered successfully', 'user_id': user_id})
+        new_user = supabaseUser(username=username, email=email, password=password)
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({'message': 'User registered successfully', 'user_id': new_user.id})
     except Exception as e:
         return jsonify({'error': str(e)})
-
 
 # Signin endpoint
 @app.route('/signin', methods=['POST'])
@@ -39,45 +34,29 @@ def signin():
     username_or_email = data.get('username_or_email')
     password = data.get('password')
 
-    # Check if the input is an email or a username
-    if '@' in username_or_email:
-        # Input is an email
-        query = "SELECT id, password FROM supabase_user WHERE email = %s;"
+    user = supabaseUser.query.filter((supabaseUser.email == username_or_email) | (supabaseUser.username == username_or_email)).first()
+
+    if user and bcrypt.check_password_hash(user.password, password):
+        return jsonify({'message': 'Login successful', 'user_id': user.id})
     else:
-        # Input is a username
-        query = "SELECT id, password FROM supabase_user WHERE username = %s;"
-
-    cursor.execute(query, (username_or_email,))
-    user_data = cursor.fetchone()
-
-    if user_data and bcrypt.check_password_hash(user_data[1], password):
-        print("user_id", user_data[0])
-        return jsonify({'message': 'Login successful', 'user_id': user_data[0]})
-    else:
-        return {'error': 'Invalid Email or password'},500
-
+        return jsonify({'error': 'Invalid Email or password'}), 500
 
 # Get all users endpoint
 @app.route('/get_all_users', methods=['GET'])
 def get_all_users():
-    cursor.execute("SELECT * FROM supabase_user;")
-    users = cursor.fetchall()
-
-    user_list = [{'id': user[0], 'username': user[1], 'email': user[2]} for user in users]
+    users = supabaseUser.query.all()
+    user_list = [{'id': user.id, 'username': user.username, 'email': user.email} for user in users]
     return jsonify({'users': user_list})
-
 
 # Get one user endpoint
 @app.route('/get_user/<int:user_id>', methods=['GET'])
 def get_user(user_id):
-    cursor.execute("SELECT * FROM supabase_user WHERE id = %s;", (user_id,))
-    user = cursor.fetchone()
+    user = supabaseUser.query.get(user_id)
 
     if user:
-        return jsonify({'user': {'id': user[0], 'username': user[1], 'email': user[2]}})
+        return jsonify({'user': {'id': user.id, 'username': user.username, 'email': user.email}})
     else:
         return jsonify({'error': 'User not found'})
-
 
 # Update one user endpoint
 @app.route('/update_user/<int:user_id>', methods=['PUT'])
@@ -87,21 +66,99 @@ def update_user(user_id):
     new_email = data.get('email')
 
     try:
-        cursor.execute("UPDATE supabase_user SET username = %s, email = %s WHERE id = %s;",
-                       (new_username, new_email, user_id))
-        conn.commit()
-        return jsonify({'message': 'User updated successfully'})
+        user = supabaseUser.query.get(user_id)
+
+        if user:
+            user.username = new_username
+            user.email = new_email
+
+            db.session.commit()
+            return jsonify({'message': 'User updated successfully'})
+        else:
+            return jsonify({'error': 'User not found'})
     except Exception as e:
         return jsonify({'error': str(e)})
-
 
 # Delete one user endpoint
 @app.route('/delete_user/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     try:
-        cursor.execute("DELETE FROM supabase_user WHERE id = %s;", (user_id,))
-        conn.commit()
-        return jsonify({'message': 'User deleted successfully'})
+        user = supabaseUser.query.get(user_id)
+
+        if user:
+            db.session.delete(user)
+            db.session.commit()
+            return jsonify({'message': 'User deleted successfully'})
+        else:
+            return jsonify({'error': 'User not found'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# Create employee endpoint
+@app.route('/create_employee', methods=['POST'])
+def create_employee():
+    data = request.get_json()
+    new_employee = Employee(**data)
+
+    try:
+        db.session.add(new_employee)
+        db.session.commit()
+        return jsonify({'message': 'Employee created successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# Get all employees endpoint
+@app.route('/get_all_employees', methods=['GET'])
+def get_all_employees():
+    employees = Employee.query.all()
+    employee_list = [{'employee_id': emp.employee_id, 'employee_name': emp.employee_name, 'age': emp.age,
+                      'gender': emp.gender, 'is_active': emp.is_active, 'aadhar_number': emp.aadhar_number,
+                      'mobile_number': emp.mobile_number, 'city': emp.city} for emp in employees]
+    return jsonify({'employees': employee_list})
+
+# Get one employee endpoint
+@app.route('/get_employee/<int:employee_id>', methods=['GET'])
+def get_employee(employee_id):
+    employee = Employee.query.get(employee_id)
+
+    if employee:
+        return jsonify({'employee': {'employee_id': employee.employee_id, 'employee_name': employee.employee_name,
+                                     'age': employee.age, 'gender': employee.gender, 'is_active': employee.is_active,
+                                     'aadhar_number': employee.aadhar_number, 'mobile_number': employee.mobile_number,
+                                     'city': employee.city}})
+    else:
+        return jsonify({'error': 'Employee not found'})
+
+# Update one employee endpoint
+@app.route('/update_employee/<int:employee_id>', methods=['PUT'])
+def update_employee(employee_id):
+    data = request.get_json()
+    try:
+        employee = Employee.query.get(employee_id)
+
+        if employee:
+            for key, value in data.items():
+                setattr(employee, key, value)
+
+            db.session.commit()
+            return jsonify({'message': 'Employee updated successfully'})
+        else:
+            return jsonify({'error': 'Employee not found'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# Delete one employee endpoint
+@app.route('/delete_employee/<int:employee_id>', methods=['DELETE'])
+def delete_employee(employee_id):
+    try:
+        employee = Employee.query.get(employee_id)
+
+        if employee:
+            db.session.delete(employee)
+            db.session.commit()
+            return jsonify({'message': 'Employee deleted successfully'})
+        else:
+            return jsonify({'error': 'Employee not found'})
     except Exception as e:
         return jsonify({'error': str(e)})
 

@@ -67,7 +67,7 @@ const Login = () => {
       setEmailError('Enter a valid email address');
     } else {
       setEmailError('');
-    }
+    }3
   };
 
   const validatePassword = () => {
